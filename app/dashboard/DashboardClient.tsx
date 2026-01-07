@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { GitBranch, Plus, LogOut, FileText, Download, Trash2, Eye } from 'lucide-react'
+import { GitBranch, Plus, LogOut, FileText, Download, Trash2, Eye, Filter, X } from 'lucide-react'
 import Link from 'next/link'
 
 interface DashboardClientProps {
@@ -19,6 +19,7 @@ export default function DashboardClient({
 }: DashboardClientProps) {
   const [repos, setRepos] = useState(initialRepos)
   const [changelogs, setChangelogs] = useState(initialChangelogs)
+  const [selectedRepoFilter, setSelectedRepoFilter] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -63,6 +64,25 @@ export default function DashboardClient({
       console.error('Error downloading changelog:', error)
       alert('Failed to download changelog')
     }
+  }
+
+  // Filter changelogs based on selected repo
+  const filteredChangelogs = selectedRepoFilter
+    ? changelogs.filter(c => c.repo_id === selectedRepoFilter)
+    : changelogs
+
+  const handleRepoFilterClick = (repoId: string) => {
+    if (selectedRepoFilter === repoId) {
+      setSelectedRepoFilter(null) // Deselect if clicking the same repo
+    } else {
+      setSelectedRepoFilter(repoId)
+      // Scroll to changelogs section
+      document.getElementById('changelogs-section')?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
+
+  const clearFilter = () => {
+    setSelectedRepoFilter(null)
   }
 
   return (
@@ -137,8 +157,14 @@ export default function DashboardClient({
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {repos.map((repo) => {
                 const repoChangelogCount = changelogs.filter(c => c.repo_id === repo.id).length
+                const isSelected = selectedRepoFilter === repo.id
                 return (
-                  <div key={repo.id} className="card hover:shadow-lg transition-shadow p-4">
+                  <div 
+                    key={repo.id} 
+                    className={`card hover:shadow-lg transition-all p-4 ${
+                      isSelected ? 'ring-2 ring-primary-500 shadow-lg' : ''
+                    }`}
+                  >
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">{repo.repo_name}</h4>
@@ -151,10 +177,18 @@ export default function DashboardClient({
                         </span>
                       </div>
                       <p className="text-xs text-gray-600 line-clamp-1 mb-2">{repo.repo_owner}</p>
-                      <div className="flex items-center gap-1 text-xs text-purple-600">
+                      <button
+                        onClick={() => handleRepoFilterClick(repo.id)}
+                        className={`flex items-center gap-1 text-xs transition-colors ${
+                          isSelected 
+                            ? 'text-primary-700 font-bold' 
+                            : 'text-purple-600 hover:text-purple-700'
+                        }`}
+                        title="Click to filter changelogs"
+                      >
                         <FileText className="w-3 h-3" />
                         <span className="font-medium">{repoChangelogCount} changelog{repoChangelogCount !== 1 ? 's' : ''}</span>
-                      </div>
+                      </button>
                     </div>
                     <Link
                       href={`/dashboard/generate?repo=${repo.id}`}
@@ -170,20 +204,76 @@ export default function DashboardClient({
         </section>
 
         {/* Recent Changelogs */}
-        <section>
-          <h3 className="text-xl font-bold mb-4 text-gray-900">Recent Changelogs</h3>
+        <section id="changelogs-section">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-gray-900">Recent Changelogs</h3>
+            
+            {/* Filter Controls */}
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedRepoFilter || ''}
+                onChange={(e) => setSelectedRepoFilter(e.target.value || null)}
+                className="text-sm border border-gray-300 rounded px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">All Repositories</option>
+                {repos.map((repo) => (
+                  <option key={repo.id} value={repo.id}>
+                    {repo.repo_name}
+                  </option>
+                ))}
+              </select>
+              
+              {selectedRepoFilter && (
+                <button
+                  onClick={clearFilter}
+                  className="text-xs px-2 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded flex items-center gap-1"
+                  title="Clear filter"
+                >
+                  <X className="w-3 h-3" />
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
 
-          {changelogs.length === 0 ? (
+          {selectedRepoFilter && (
+            <div className="mb-4 p-3 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <Filter className="w-4 h-4 text-primary-600" />
+                <span className="text-primary-900">
+                  Showing changelogs for <strong>{repos.find(r => r.id === selectedRepoFilter)?.repo_name}</strong>
+                </span>
+              </div>
+              <button
+                onClick={clearFilter}
+                className="text-primary-700 hover:text-primary-900 text-sm font-medium"
+              >
+                View all
+              </button>
+            </div>
+          )}
+
+          {filteredChangelogs.length === 0 ? (
             <div className="card text-center py-8">
               <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-600 text-sm mb-3">No changelogs generated yet</p>
-              <Link href="/dashboard/generate" className="btn-primary text-sm">
-                Generate Changelog
-              </Link>
+              <p className="text-gray-600 text-sm mb-3">
+                {selectedRepoFilter 
+                  ? 'No changelogs found for this repository' 
+                  : 'No changelogs generated yet'}
+              </p>
+              {selectedRepoFilter ? (
+                <button onClick={clearFilter} className="btn-secondary text-sm">
+                  View All Changelogs
+                </button>
+              ) : (
+                <Link href="/dashboard/generate" className="btn-primary text-sm">
+                  Generate Changelog
+                </Link>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {changelogs.map((changelog: any) => (
+              {filteredChangelogs.map((changelog: any) => (
                 <div key={changelog.id} className="card p-4 hover:shadow-lg transition-shadow">
                   <div className="mb-3">
                     <h4 className="font-semibold text-sm mb-1 text-gray-900 line-clamp-2">
