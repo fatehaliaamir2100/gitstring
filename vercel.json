@@ -1,0 +1,39 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "devCommand": "next dev",
+  "installCommand": "npm install",
+  "regions": ["iad1"],
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": {
+      "description": "Supabase project URL",
+      "link": "https://app.supabase.io"
+    },
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": {
+      "description": "Supabase anonymous key",
+      "link": "https://app.supabase.io"
+    },
+    "SUPABASE_SERVICE_ROLE_KEY": {
+      "description": "Supabase service role key (secret)",
+      "link": "https://app.supabase.io"
+    },
+    "GITHUB_CLIENT_ID": {
+      "description": "GitHub OAuth App Client ID"
+    },
+    "GITHUB_CLIENT_SECRET": {
+      "description": "GitHub OAuth App Client Secret"
+    },
+    "GITLAB_CLIENT_ID": {
+      "description": "GitLab OAuth App Client ID (optional)"
+    },
+    "GITLAB_CLIENT_SECRET": {
+      "description": "GitLab OAuth App Client Secret (optional)"
+    },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API Key for AI features (optional)"
+    },
+    "NEXT_PUBLIC_APP_URL": {
+      "description": "Your app URL (https://your-app.vercel.app)"
+    }
+  }
+}
