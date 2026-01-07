@@ -5,6 +5,7 @@ import { getProviderToken } from '@/lib/tokenHelper'
 import { sanitizeError } from '@/lib/security'
 import { rateLimiters } from '@/lib/rateLimit'
 import { logger } from '@/lib/logger'
+import { RepoCache } from '@/lib/cache'
 
 /**
  * GET /api/repos/discover - Fetch available repositories from provider
@@ -46,6 +47,19 @@ export async function GET(request: NextRequest) {
 
     logger.info('Discovering repositories', { provider, userId: user.id })
 
+    // Check cache first
+    const cached = RepoCache.get(user.id, provider)
+    if (cached) {
+      logger.info('Repositories retrieved from cache', { provider, userId: user.id, repoCount: cached.length })
+      const duration = Date.now() - startTime
+      logger.apiResponse('GET', '/api/repos/discover', 200, duration, { 
+        provider, 
+        repoCount: cached.length,
+        cached: true
+      })
+      return NextResponse.json({ repos: cached })
+    }
+
     // Get stored encrypted token (server-side only)
     const accessToken = await getProviderToken(user.id, provider)
     
@@ -67,6 +81,12 @@ export async function GET(request: NextRequest) {
       repos = await fetchGitLabProjects(accessToken)
     } else {
       return NextResponse.json({ error: 'Unsupported provider' }, { status: 400 })
+    }
+
+    // Cache the results
+    if (repos && repos.length > 0) {
+      RepoCache.set(user.id, provider, repos)
+      logger.debug('Repositories cached', { provider, userId: user.id, repoCount: repos.length })
     }
 
     const duration = Date.now() - startTime

@@ -8,6 +8,7 @@ import { validateInput, changelogGenerationSchema } from '@/lib/validation'
 import { sanitizeError } from '@/lib/security'
 import { rateLimiters } from '@/lib/rateLimit'
 import { logger, measureTime } from '@/lib/logger'
+import { CommitCache, ChangelogCache } from '@/lib/cache'
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -79,38 +80,53 @@ export async function POST(request: NextRequest) {
 
     // Fetch commits from Git provider
     logger.info('Fetching commits from provider', { provider: repo.provider, owner: repo.repo_owner, repoName: repo.repo_name })
-    let commits
-    if (repo.provider === 'github') {
-      if (startRef && endRef) {
-        commits = await fetchGitHubCommits(
+    
+    // Check cache for commits first
+    const cacheKey = `${repo.provider}:${repo.repo_owner}/${repo.repo_name}:${startRef || 'HEAD'}:${endRef || 'HEAD'}`
+    let commits = CommitCache.get(cacheKey)
+    
+    if (commits) {
+      logger.info('Commits retrieved from cache', { commitCount: commits.length, cacheKey })
+    } else {
+      // Fetch from provider
+      if (repo.provider === 'github') {
+        if (startRef && endRef) {
+          commits = await fetchGitHubCommits(
+            accessToken,
+            repo.repo_owner,
+            repo.repo_name,
+            startRef,
+            endRef
+          )
+        } else {
+          commits = await fetchGitHubCommits(
+            accessToken,
+            repo.repo_owner,
+            repo.repo_name,
+            undefined,
+            undefined,
+            true // includeDetails to fetch file changes
+          )
+        }
+      } else if (repo.provider === 'gitlab') {
+        const projectId = `${repo.repo_owner}/${repo.repo_name}`
+        commits = await fetchGitLabCommits(
           accessToken,
-          repo.repo_owner,
-          repo.repo_name,
+          projectId,
+          endRef || repo.default_branch,
           startRef,
-          endRef
-        )
-      } else {
-        commits = await fetchGitHubCommits(
-          accessToken,
-          repo.repo_owner,
-          repo.repo_name,
-          undefined,
-          undefined,
+          endRef,
           true // includeDetails to fetch file changes
         )
+      } else {
+        return NextResponse.json({ error: 'Unsupported provider' }, { status: 400 })
       }
-    } else if (repo.provider === 'gitlab') {
-      const projectId = `${repo.repo_owner}/${repo.repo_name}`
-      commits = await fetchGitLabCommits(
-        accessToken,
-        projectId,
-        endRef || repo.default_branch,
-        startRef,
-        endRef,
-        true // includeDetails to fetch file changes
-      )
-    } else {
-      return NextResponse.json({ error: 'Unsupported provider' }, { status: 400 })
+      
+      // Cache the commits
+      if (commits && commits.length > 0) {
+        CommitCache.set(cacheKey, commits)
+        logger.debug('Commits cached', { commitCount: commits.length, cacheKey })
+      }
     }
 
     if (!commits || commits.length === 0) {

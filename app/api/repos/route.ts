@@ -6,6 +6,7 @@ import { encrypt, sanitizeError } from '@/lib/security'
 import { getProviderToken } from '@/lib/tokenHelper'
 import { rateLimiters } from '@/lib/rateLimit'
 import { logger } from '@/lib/logger'
+import { RepoCache, CommitCache, ChangelogCache } from '@/lib/cache'
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now()
@@ -144,6 +145,10 @@ export async function POST(request: NextRequest) {
     logger.info('Repository connected successfully', { repoId: repo.id, repoFullName, duration })
     logger.apiResponse('POST', '/api/repos', 200, duration, { repoId: repo.id })
     
+    // Invalidate repo cache after adding new repo
+    RepoCache.invalidate(user.id, validatedRepo.provider as 'github' | 'gitlab')
+    logger.debug('Repo cache invalidated after adding new repo', { provider: validatedRepo.provider })
+    
     return NextResponse.json({ success: true, repo })
   } catch (error) {
     const safeError = sanitizeError(error)
@@ -198,6 +203,10 @@ export async function DELETE(request: NextRequest) {
     const duration = Date.now() - startTime
     logger.info('Repository deleted successfully', { repoId, duration })
     logger.apiResponse('DELETE', '/api/repos', 200, duration, { repoId })
+    
+    // Invalidate all related caches
+    RepoCache.invalidate(user.id) // Invalidates all providers for user
+    logger.debug('Caches invalidated after repo deletion', { repoId })
     
     return NextResponse.json({ success: true })
   } catch (error) {
