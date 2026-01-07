@@ -4,6 +4,10 @@ A powerful micro-SaaS tool that transforms your Git commits into professional, A
 
 ![GitString Banner](https://img.shields.io/badge/GitString-Changelog%20Generator-blue?style=for-the-badge)
 
+> **🎯 New here?** Start with [GETTING_STARTED.md](GETTING_STARTED.md) for a complete walkthrough!
+> 
+> **📚 Looking for something specific?** Check the [DOCS_INDEX.md](DOCS_INDEX.md) for a complete documentation map.
+
 ## ✨ Features
 
 - 🔗 **Multi-Platform Support** - Connect GitHub and GitLab (including self-hosted)

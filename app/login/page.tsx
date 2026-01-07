@@ -73,7 +73,7 @@ export default function LoginPage() {
 
         {/* Login Card */}
         <div className="card">
-          <h2 className="text-2xl font-bold mb-6 text-center">Sign In</h2>
+          <h2 className="text-2xl font-bold mb-6 text-center text-gray-900">Sign In</h2>
 
           <div className="space-y-4">
             <button

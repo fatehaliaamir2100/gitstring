@@ -93,15 +93,15 @@ export default function DashboardClient({
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Dashboard</h2>
+          <h2 className="text-3xl font-bold mb-2 text-gray-900">Dashboard</h2>
           <p className="text-gray-600">Manage your repositories and changelogs</p>
         </div>
 
         {/* Quick Actions */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
+        <div className="grid md:grid-cols-3 gap-4 mb-8">
           <Link
             href="/dashboard/generate"
-            className="card hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed border-primary-300 bg-primary-50"
+            className="md:col-span-2 card hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed border-primary-300 bg-primary-50"
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-primary-600 rounded-lg flex items-center justify-center">
@@ -114,62 +114,56 @@ export default function DashboardClient({
             </div>
           </Link>
 
-          <div className="card">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <FileText className="w-6 h-6 text-purple-600" />
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold">Total Changelogs</h3>
-                <p className="text-2xl font-bold text-purple-600">{changelogs.length}</p>
-              </div>
+          <div className="card flex flex-col items-center justify-center text-center">
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-2">
+              <FileText className="w-6 h-6 text-purple-600" />
             </div>
+            <h3 className="text-sm font-medium text-gray-700 mb-1">Total Changelogs</h3>
+            <p className="text-3xl font-bold text-purple-600">{changelogs.length}</p>
           </div>
         </div>
 
         {/* Connected Repositories */}
         <section className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-2xl font-bold">Connected Repositories</h3>
-            <Link href="/dashboard/repos/connect" className="btn-primary">
-              <Plus className="w-4 h-4 inline mr-2" />
-              Connect Repository
+            <h3 className="text-xl font-bold text-gray-900">Repositories</h3>
+            <Link href="/dashboard/repos/connect" className="btn-primary text-sm">
+              <Plus className="w-4 h-4 inline mr-1" />
+              Connect
             </Link>
           </div>
 
           {repos.length === 0 ? (
-            <div className="card text-center py-12">
-              <GitBranch className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-600 mb-4">No repositories connected yet</p>
-              <Link href="/dashboard/repos/connect" className="btn-primary">
-                Connect Your First Repository
+            <div className="card text-center py-8">
+              <GitBranch className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-600 text-sm mb-3">No repositories connected yet</p>
+              <Link href="/dashboard/repos/connect" className="btn-primary text-sm">
+                Connect Repository
               </Link>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {repos.map((repo) => (
-                <div key={repo.id} className="card hover:shadow-lg transition-shadow">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-lg">{repo.repo_name}</h4>
-                      <p className="text-sm text-gray-600">{repo.repo_owner}</p>
+                <div key={repo.id} className="card hover:shadow-lg transition-shadow p-4">
+                  <div className="mb-3">
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">{repo.repo_name}</h4>
+                      <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ml-1 ${
+                        repo.provider === 'github' 
+                          ? 'bg-gray-900 text-white' 
+                          : 'bg-orange-600 text-white'
+                      }`}>
+                        {repo.provider === 'github' ? 'GH' : 'GL'}
+                      </span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      repo.provider === 'github' 
-                        ? 'bg-gray-900 text-white' 
-                        : 'bg-orange-600 text-white'
-                    }`}>
-                      {repo.provider}
-                    </span>
+                    <p className="text-xs text-gray-600 line-clamp-1">{repo.repo_owner}</p>
                   </div>
-                  <div className="flex gap-2 mt-4">
-                    <Link
-                      href={`/dashboard/generate?repo=${repo.id}`}
-                      className="btn-primary text-sm flex-1"
-                    >
-                      Generate
-                    </Link>
-                  </div>
+                  <Link
+                    href={`/dashboard/generate?repo=${repo.id}`}
+                    className="btn-primary text-xs w-full block text-center py-2"
+                  >
+                    Generate
+                  </Link>
                 </div>
               ))}
             </div>
@@ -178,62 +172,57 @@ export default function DashboardClient({
 
         {/* Recent Changelogs */}
         <section>
-          <h3 className="text-2xl font-bold mb-4">Recent Changelogs</h3>
+          <h3 className="text-xl font-bold mb-4 text-gray-900">Recent Changelogs</h3>
 
           {changelogs.length === 0 ? (
-            <div className="card text-center py-12">
-              <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-600 mb-4">No changelogs generated yet</p>
-              <Link href="/dashboard/generate" className="btn-primary">
-                Generate Your First Changelog
+            <div className="card text-center py-8">
+              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-600 text-sm mb-3">No changelogs generated yet</p>
+              <Link href="/dashboard/generate" className="btn-primary text-sm">
+                Generate Changelog
               </Link>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {changelogs.map((changelog: any) => (
-                <div key={changelog.id} className="card">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-lg mb-1">
-                        {changelog.title || 'Untitled Changelog'}
-                      </h4>
-                      <p className="text-sm text-gray-600 mb-2">
-                        {changelog.repos?.repo_full_name || 'Unknown Repository'}
-                      </p>
-                      <div className="flex gap-4 text-sm text-gray-500">
-                        <span>{changelog.commit_count} commits</span>
-                        {changelog.tag_start && changelog.tag_end && (
-                          <span>{changelog.tag_start} → {changelog.tag_end}</span>
-                        )}
-                        <span>{new Date(changelog.created_at).toLocaleDateString()}</span>
-                      </div>
+                <div key={changelog.id} className="card p-4 hover:shadow-lg transition-shadow">
+                  <div className="mb-3">
+                    <h4 className="font-semibold text-sm mb-1 text-gray-900 line-clamp-2">
+                      {changelog.title || 'Untitled Changelog'}
+                    </h4>
+                    <p className="text-xs text-gray-600 mb-2 line-clamp-1">
+                      {changelog.repos?.repo_full_name || 'Unknown Repository'}
+                    </p>
+                    <div className="flex flex-col gap-1 text-xs text-gray-500">
+                      <span>{changelog.commit_count} commits</span>
+                      <span className="line-clamp-1">{new Date(changelog.created_at).toLocaleDateString()}</span>
                     </div>
+                  </div>
 
-                    <div className="flex gap-2">
-                      <Link
-                        href={`/changelog/${changelog.id}`}
-                        className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded"
-                        title="View"
-                      >
-                        <Eye className="w-5 h-5" />
-                      </Link>
-                      
-                      <button
-                        onClick={() => downloadChangelog(changelog.id, 'markdown')}
-                        className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded"
-                        title="Download Markdown"
-                      >
-                        <Download className="w-5 h-5" />
-                      </button>
-                      
-                      <button
-                        onClick={() => handleDeleteChangelog(changelog.id)}
-                        className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
+                  <div className="flex gap-1 pt-3 border-t border-gray-200">
+                    <Link
+                      href={`/changelog/${changelog.id}`}
+                      className="flex-1 p-1.5 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded text-center"
+                      title="View"
+                    >
+                      <Eye className="w-4 h-4 mx-auto" />
+                    </Link>
+                    
+                    <button
+                      onClick={() => downloadChangelog(changelog.id, 'markdown')}
+                      className="flex-1 p-1.5 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded"
+                      title="Download"
+                    >
+                      <Download className="w-4 h-4 mx-auto" />
+                    </button>
+                    
+                    <button
+                      onClick={() => handleDeleteChangelog(changelog.id)}
+                      className="flex-1 p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4 mx-auto" />
+                    </button>
                   </div>
                 </div>
               ))}
