@@ -98,10 +98,10 @@ export default function DashboardClient({
         </div>
 
         {/* Quick Actions */}
-        <div className="grid md:grid-cols-3 gap-4 mb-8">
+        <div className="mb-8">
           <Link
             href="/dashboard/generate"
-            className="md:col-span-2 card hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed border-primary-300 bg-primary-50"
+            className="card hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed border-primary-300 bg-primary-50 block"
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-primary-600 rounded-lg flex items-center justify-center">
@@ -113,14 +113,6 @@ export default function DashboardClient({
               </div>
             </div>
           </Link>
-
-          <div className="card flex flex-col items-center justify-center text-center">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-2">
-              <FileText className="w-6 h-6 text-purple-600" />
-            </div>
-            <h3 className="text-sm font-medium text-gray-700 mb-1">Total Changelogs</h3>
-            <p className="text-3xl font-bold text-purple-600">{changelogs.length}</p>
-          </div>
         </div>
 
         {/* Connected Repositories */}
@@ -143,29 +135,36 @@ export default function DashboardClient({
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {repos.map((repo) => (
-                <div key={repo.id} className="card hover:shadow-lg transition-shadow p-4">
-                  <div className="mb-3">
-                    <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">{repo.repo_name}</h4>
-                      <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ml-1 ${
-                        repo.provider === 'github' 
-                          ? 'bg-gray-900 text-white' 
-                          : 'bg-orange-600 text-white'
-                      }`}>
-                        {repo.provider === 'github' ? 'GH' : 'GL'}
-                      </span>
+              {repos.map((repo) => {
+                const repoChangelogCount = changelogs.filter(c => c.repo_id === repo.id).length
+                return (
+                  <div key={repo.id} className="card hover:shadow-lg transition-shadow p-4">
+                    <div className="mb-3">
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">{repo.repo_name}</h4>
+                        <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ml-1 ${
+                          repo.provider === 'github' 
+                            ? 'bg-gray-900 text-white' 
+                            : 'bg-orange-600 text-white'
+                        }`}>
+                          {repo.provider === 'github' ? 'GH' : 'GL'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 line-clamp-1 mb-2">{repo.repo_owner}</p>
+                      <div className="flex items-center gap-1 text-xs text-purple-600">
+                        <FileText className="w-3 h-3" />
+                        <span className="font-medium">{repoChangelogCount} changelog{repoChangelogCount !== 1 ? 's' : ''}</span>
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-600 line-clamp-1">{repo.repo_owner}</p>
+                    <Link
+                      href={`/dashboard/generate?repo=${repo.id}`}
+                      className="btn-primary text-xs w-full block text-center py-2"
+                    >
+                      Generate
+                    </Link>
                   </div>
-                  <Link
-                    href={`/dashboard/generate?repo=${repo.id}`}
-                    className="btn-primary text-xs w-full block text-center py-2"
-                  >
-                    Generate
-                  </Link>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </section>

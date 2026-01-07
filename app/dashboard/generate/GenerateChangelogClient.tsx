@@ -122,7 +122,7 @@ export default function GenerateChangelogClient({ repos }: { repos: Repo[] }) {
 
       <main className="container mx-auto px-4 py-8 max-w-3xl">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Generate Changelog</h2>
+          <h2 className="text-gray-600 text-3xl font-bold mb-2">Generate Changelog</h2>
           <p className="text-gray-600">Select a repository and commit range</p>
         </div>
 
@@ -135,7 +135,7 @@ export default function GenerateChangelogClient({ repos }: { repos: Repo[] }) {
             <select
               value={selectedRepo}
               onChange={(e) => setSelectedRepo(e.target.value)}
-              className="input"
+              className="input text-gray-900"
               required
             >
               <option value="">Select a repository</option>
@@ -157,7 +157,7 @@ export default function GenerateChangelogClient({ repos }: { repos: Repo[] }) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={selectedRepoData ? `Changelog for ${selectedRepoData.repo_full_name}` : 'Enter title'}
-              className="input"
+              className="input text-gray-900 placeholder:text-gray-400"
             />
           </div>
 
@@ -168,7 +168,7 @@ export default function GenerateChangelogClient({ repos }: { repos: Repo[] }) {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Compare Type
                 </label>
-                <div className="flex gap-4">
+                <div className="flex gap-4 text-gray-700">
                   <label className="flex items-center">
                     <input
                       type="radio"

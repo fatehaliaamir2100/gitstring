@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Github, Search, Loader2, Plus } from 'lucide-react'
+import { ArrowLeft, Github, Search, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
 interface GitRepo {
   id: string | number
@@ -24,6 +24,9 @@ export default function ConnectRepoClient() {
   const [repos, setRepos] = useState<GitRepo[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [accessToken, setAccessToken] = useState('')
+  const [savedToken, setSavedToken] = useState<string | null>(null)
+  const [hasToken, setHasToken] = useState(false)
+  const [showTokenInput, setShowTokenInput] = useState(false)
   const [showManual, setShowManual] = useState(false)
   const [manualForm, setManualForm] = useState({
     repoOwner: '',
@@ -33,12 +36,77 @@ export default function ConnectRepoClient() {
     repoUrl: '',
   })
 
-  const fetchRepos = async () => {
-    if (!accessToken) {
-      alert('Please enter an access token')
+  // Load saved token on mount and when provider changes
+  useEffect(() => {
+    loadSavedToken()
+  }, [provider])
+
+  const loadSavedToken = async () => {
+    try {
+      const response = await fetch(`/api/provider-tokens?provider=${provider}`)
+      const data = await response.json()
+
+      if (response.ok && data.hasToken && data.token) {
+        setSavedToken(data.token)
+        setAccessToken(data.token)
+        setHasToken(true)
+        setShowTokenInput(false)
+        // Auto-fetch repos if token exists
+        fetchReposWithToken(data.token)
+      } else {
+        setSavedToken(null)
+        setAccessToken('')
+        setHasToken(false)
+        setShowTokenInput(true)
+      }
+    } catch (error) {
+      console.error('Error loading saved token:', error)
+      setShowTokenInput(true)
+    }
+  }
+
+  const saveToken = async (token: string) => {
+    try {
+      const response = await fetch('/api/provider-tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, token }),
+      })
+
+      if (response.ok) {
+        setSavedToken(token)
+        setHasToken(true)
+        setShowTokenInput(false)
+      }
+    } catch (error) {
+      console.error('Error saving token:', error)
+    }
+  }
+
+  const deleteToken = async () => {
+    if (!confirm('Are you sure you want to remove the saved token? You will need to enter it again.')) {
       return
     }
 
+    try {
+      const response = await fetch(`/api/provider-tokens?provider=${provider}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setSavedToken(null)
+        setAccessToken('')
+        setHasToken(false)
+        setShowTokenInput(true)
+        setRepos([])
+      }
+    } catch (error) {
+      console.error('Error deleting token:', error)
+      alert('Failed to delete token')
+    }
+  }
+
+  const fetchReposWithToken = async (token: string) => {
     setIsLoading(true)
     try {
       const url =
@@ -49,11 +117,11 @@ export default function ConnectRepoClient() {
       const headers =
         provider === 'github'
           ? {
-              Authorization: `Bearer ${accessToken}`,
+              Authorization: `Bearer ${token}`,
               Accept: 'application/vnd.github.v3+json',
             }
           : {
-              'PRIVATE-TOKEN': accessToken,
+              'PRIVATE-TOKEN': token,
             }
 
       const response = await fetch(url, { headers })
@@ -88,6 +156,31 @@ export default function ConnectRepoClient() {
       alert('Failed to fetch repositories. Check your access token and try again.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchRepos = async () => {
+    if (!accessToken) {
+      alert('Please enter an access token')
+      return
+    }
+
+    // Save token for future use
+    await saveToken(accessToken)
+    
+    // Fetch repos with the token
+    await fetchReposWithToken(accessToken)
+  }
+
+  const refreshRepos = async () => {
+    if (!accessToken && !savedToken) {
+      alert('No token available. Please enter an access token.')
+      return
+    }
+
+    const tokenToUse = accessToken || savedToken
+    if (tokenToUse) {
+      await fetchReposWithToken(tokenToUse)
     }
   }
 
@@ -216,64 +309,112 @@ export default function ConnectRepoClient() {
           </div>
 
           {/* Access Token */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Access Token *
-              <span className="text-xs text-gray-500 ml-2">
-                {provider === 'github' ? (
-                  <a
-                    href="https://github.com/settings/tokens/new?scopes=repo"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary-600 hover:underline"
+          {!hasToken || showTokenInput ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Access Token *
+                <span className="text-xs text-gray-500 ml-2">
+                  {provider === 'github' ? (
+                    <a
+                      href="https://github.com/settings/tokens/new?scopes=repo"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary-600 hover:underline"
+                    >
+                      Create GitHub token
+                    </a>
+                  ) : (
+                    <a
+                      href="https://gitlab.com/-/profile/personal_access_tokens"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary-600 hover:underline"
+                    >
+                      Create GitLab token
+                    </a>
+                  )}
+                </span>
+              </label>
+              <input
+                type="password"
+                value={accessToken}
+                onChange={(e) => setAccessToken(e.target.value)}
+                placeholder={provider === 'github' ? 'ghp_xxxxxxxxxxxx' : 'glpat-xxxxxxxxxxxx'}
+                className="input"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {provider === 'github'
+                  ? 'Requires "repo" scope for accessing repositories'
+                  : 'Requires "read_api", "read_repository" scopes'}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-sm font-medium text-green-800">
+                    Token saved for {provider === 'github' ? 'GitHub' : 'GitLab'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowTokenInput(true)}
+                    className="text-xs text-green-700 hover:text-green-900 underline"
                   >
-                    Create GitHub token
-                  </a>
-                ) : (
-                  <a
-                    href="https://gitlab.com/-/profile/personal_access_tokens"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary-600 hover:underline"
+                    Update token
+                  </button>
+                  <button
+                    onClick={deleteToken}
+                    className="p-1 text-red-600 hover:text-red-800"
+                    title="Remove saved token"
                   >
-                    Create GitLab token
-                  </a>
-                )}
-              </span>
-            </label>
-            <input
-              type="password"
-              value={accessToken}
-              onChange={(e) => setAccessToken(e.target.value)}
-              placeholder={provider === 'github' ? 'ghp_xxxxxxxxxxxx' : 'glpat-xxxxxxxxxxxx'}
-              className="input"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              {provider === 'github'
-                ? 'Requires "repo" scope for accessing repositories'
-                : 'Requires "read_api", "read_repository" scopes'}
-            </p>
-          </div>
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
-          {/* Fetch Repos Button */}
-          <div>
-            <button
-              onClick={fetchRepos}
-              disabled={isLoading || !accessToken}
-              className="btn-primary w-full flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Loading repositories...
-                </>
-              ) : (
-                <>
-                  <Search className="w-5 h-5" />
-                  Fetch My Repositories
-                </>
-              )}
-            </button>
+          {/* Fetch/Refresh Repos Button */}
+          <div className="flex gap-3">
+            {!hasToken || showTokenInput ? (
+              <button
+                onClick={fetchRepos}
+                disabled={isLoading || !accessToken}
+                className="btn-primary flex-1 flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Loading repositories...
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-5 h-5" />
+                    Save Token & Fetch Repositories
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={refreshRepos}
+                disabled={isLoading}
+                className="btn-primary flex-1 flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Refreshing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-5 h-5" />
+                    Refresh Repositories
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Repository List */}
