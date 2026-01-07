@@ -6,7 +6,73 @@ const openai = new OpenAI({
 })
 
 /**
- * Generate AI-enhanced changelog summary using OpenAI
+ * Generate AI-enhanced changelog summary using OpenAI with code diff analysis
+ */
+export async function generateAiSummaryWithDiffs(
+  groups: CommitGroup[],
+  repoName: string
+): Promise<string> {
+  try {
+    // Prepare detailed commit data including file changes
+    const commitDetails = groups
+      .map((group) => {
+        const commits = group.commits
+          .map((c) => {
+            const fileChanges = c.files && c.files.length > 0
+              ? `\n  Files changed:\n${c.files.slice(0, 5).map(f => `    - ${f.filename} (+${f.additions}/-${f.deletions})`).join('\n')}`
+              : ''
+            const stats = c.stats 
+              ? `\n  Changes: +${c.stats.additions}/-${c.stats.deletions}`
+              : ''
+            return `- ${c.message.split('\n')[0]}${fileChanges}${stats}`
+          })
+          .join('\n')
+        return `${group.category}:\n${commits}`
+      })
+      .join('\n\n')
+
+    const prompt = `You are a technical writer creating a professional changelog for the repository "${repoName}".
+
+Below are the commits with their file changes and statistics:
+
+${commitDetails}
+
+Generate a well-structured, professional changelog in Markdown format that:
+1. Groups changes by category with appropriate emojis
+2. Analyzes the actual file changes to understand what features/fixes were implemented
+3. Summarizes related changes into concise, meaningful bullet points
+4. Highlights breaking changes, security fixes, and major features
+5. Uses clear, user-friendly language that explains WHAT changed and WHY it matters
+6. Includes a brief executive summary at the top
+7. When multiple files relate to the same feature, group them together
+
+Focus on the impact and purpose of changes, not just listing commit messages.`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional technical writer specializing in creating clear, insightful changelogs that help users understand code changes.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 3000,
+    })
+
+    return response.choices[0].message.content || ''
+  } catch (error) {
+    console.error('Error generating AI summary with diffs:', error)
+    throw new Error('Failed to generate AI summary')
+  }
+}
+
+/**
+ * Generate AI-enhanced changelog summary using OpenAI (legacy method)
  */
 export async function generateAiSummary(
   groups: CommitGroup[],
@@ -58,6 +124,51 @@ Format the output as clean Markdown.`
   } catch (error) {
     console.error('Error generating AI summary:', error)
     throw new Error('Failed to generate AI summary')
+  }
+}
+
+/**
+ * Analyze a single commit's code changes using AI
+ */
+export async function analyzeCommitChanges(commit: GitCommit): Promise<string> {
+  try {
+    if (!commit.files || commit.files.length === 0) {
+      return commit.message.split('\n')[0]
+    }
+
+    const filesSummary = commit.files.slice(0, 10).map(f => 
+      `${f.filename} (${f.status}): +${f.additions}/-${f.deletions}`
+    ).join('\n')
+
+    const prompt = `Analyze this commit and explain what it does in one clear, concise sentence:
+
+Commit message: ${commit.message}
+
+Files changed:
+${filesSummary}
+
+Provide a single sentence that explains the purpose and impact of this commit.`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a code reviewer analyzing commits. Provide concise, clear explanations.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.5,
+      max_tokens: 150,
+    })
+
+    return response.choices[0].message.content || commit.message.split('\n')[0]
+  } catch (error) {
+    console.error('Error analyzing commit changes:', error)
+    return commit.message.split('\n')[0]
   }
 }
 

@@ -1,19 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { validateInput, queryParamsSchema } from '@/lib/validation'
+import { sanitizeError } from '@/lib/security'
+import { rateLimiters } from '@/lib/rateLimit'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // Apply rate limiting
+  const rateLimitResponse = rateLimiters.api(request)
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     const supabase = await createClient()
     const changelogId = params.id
+
+    // Validate ID format
+    const validated = validateInput(queryParamsSchema, { id: changelogId })
+    if (!validated.id) {
+      return NextResponse.json({ error: 'Invalid changelog ID' }, { status: 400 })
+    }
 
     // Fetch changelog
     const { data: changelog, error } = await supabase
       .from('changelogs')
       .select('*')
-      .eq('id', changelogId)
+      .eq('id', validated.id)
       .single()
 
     if (error || !changelog) {

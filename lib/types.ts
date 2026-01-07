@@ -76,7 +76,20 @@ export interface GitCommit {
   stats?: {
     additions: number
     deletions: number
+    total: number
   }
+  files?: FileChange[]
+  diff?: string // Full diff for AI analysis (not stored in DB)
+}
+
+export interface FileChange {
+  filename: string
+  status: 'added' | 'modified' | 'removed' | 'renamed'
+  additions: number
+  deletions: number
+  changes: number
+  patch?: string // Individual file diff
+  previous_filename?: string // For renamed files
 }
 
 export interface GitHubCommit {

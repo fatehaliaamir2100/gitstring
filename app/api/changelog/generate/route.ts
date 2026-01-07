@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fetchGitHubCommits, fetchGitLabCommits, compareCommits } from '@/lib/gitApi'
 import { groupCommitsByType, formatAsMarkdown, markdownToHtml, formatAsJson } from '@/lib/changelogLogic'
-import { generateAiSummary } from '@/lib/openaiHelper'
+import { generateAiSummaryWithDiffs } from '@/lib/openaiHelper'
+import { getProviderToken } from '@/lib/tokenHelper'
+import { validateInput, changelogGenerationSchema } from '@/lib/validation'
+import { sanitizeError } from '@/lib/security'
+import { rateLimiters } from '@/lib/rateLimit'
 
 export async function POST(request: NextRequest) {
+  // Apply rate limiting for changelog generation
+  const rateLimitResponse = rateLimiters.generate(request)
+  if (rateLimitResponse) return rateLimitResponse
   try {
     const supabase = await createClient()
 
@@ -19,11 +26,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { repoId, startRef, endRef, useAi = false, title } = body
-
-    if (!repoId) {
-      return NextResponse.json({ error: 'Repository ID is required' }, { status: 400 })
-    }
+    
+    // Validate input
+    const { repoId, startRef, endRef, useAi = false, title } = validateInput(
+      changelogGenerationSchema,
+      body
+    )
 
     // Fetch repository details
     const { data: repo, error: repoError } = await supabase
@@ -37,12 +45,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Repository not found' }, { status: 404 })
     }
 
+    // Get decrypted access token securely
+    const accessToken = await getProviderToken(user.id, repo.provider as 'github' | 'gitlab')
+    
+    if (!accessToken) {
+      return NextResponse.json({ error: 'Access token not found. Please reconnect your repository.' }, { status: 401 })
+    }
+
     // Fetch commits from Git provider
     let commits
     if (repo.provider === 'github') {
       if (startRef && endRef) {
         commits = await fetchGitHubCommits(
-          repo.access_token,
+          accessToken,
           repo.repo_owner,
           repo.repo_name,
           startRef,
@@ -50,17 +65,23 @@ export async function POST(request: NextRequest) {
         )
       } else {
         commits = await fetchGitHubCommits(
-          repo.access_token,
+          accessToken,
           repo.repo_owner,
-          repo.repo_name
+          repo.repo_name,
+          undefined,
+          undefined,
+          true // includeDetails to fetch file changes
         )
       }
     } else if (repo.provider === 'gitlab') {
       const projectId = `${repo.repo_owner}/${repo.repo_name}`
       commits = await fetchGitLabCommits(
-        repo.access_token,
+        accessToken,
         projectId,
-        endRef || repo.default_branch
+        endRef || repo.default_branch,
+        startRef,
+        endRef,
+        true // includeDetails to fetch file changes
       )
     } else {
       return NextResponse.json({ error: 'Unsupported provider' }, { status: 400 })
@@ -77,8 +98,8 @@ export async function POST(request: NextRequest) {
     let markdown: string
 
     if (useAi && process.env.OPENAI_API_KEY) {
-      // Use AI to generate enhanced changelog
-      markdown = await generateAiSummary(groups, repo.repo_full_name)
+      // Use AI to generate enhanced changelog with code analysis
+      markdown = await generateAiSummaryWithDiffs(groups, repo.repo_full_name)
     } else {
       // Use rule-based formatting
       markdown = formatAsMarkdown(groups, repo.repo_full_name, startRef, endRef)
@@ -119,9 +140,10 @@ export async function POST(request: NextRequest) {
       changelog,
     })
   } catch (error) {
-    console.error('Error generating changelog:', error)
+    const safeError = sanitizeError(error)
+    console.error('Changelog generation error:', safeError)
     return NextResponse.json(
-      { error: 'Failed to generate changelog', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to generate changelog' },
       { status: 500 }
     )
   }

@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { encrypt, sanitizeError } from '@/lib/security'
+import { validateInput, queryParamsSchema, providerTokenSchema } from '@/lib/validation'
+import { rateLimiters } from '@/lib/rateLimit'
 
-// GET - Retrieve provider token
+// GET - Check if provider token exists (NEVER returns actual token)
 export async function GET(request: NextRequest) {
+  // Apply rate limiting
+  const rateLimitResponse = rateLimiters.api(request)
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     const supabase = await createClient()
 
@@ -18,34 +25,42 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get('provider')
 
-    if (!provider || !['github', 'gitlab'].includes(provider)) {
+    // Validate provider
+    const validation = validateInput(queryParamsSchema, { provider })
+    if (!validation.provider || !['github', 'gitlab'].includes(validation.provider)) {
       return NextResponse.json({ error: 'Valid provider (github/gitlab) is required' }, { status: 400 })
     }
 
     const { data: tokenRecord, error } = await supabase
       .from('provider_tokens')
-      .select('encrypted_token')
+      .select('id, created_at, updated_at')
       .eq('user_id', user.id)
-      .eq('provider', provider)
+      .eq('provider', validation.provider)
       .single()
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching token:', error)
-      return NextResponse.json({ error: 'Failed to fetch token' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to check token' }, { status: 500 })
     }
 
+    // SECURITY: Never return the actual token, only metadata
     return NextResponse.json({ 
       hasToken: !!tokenRecord,
-      token: tokenRecord?.encrypted_token || null
+      createdAt: tokenRecord?.created_at || null,
+      updatedAt: tokenRecord?.updated_at || null
     })
   } catch (error) {
-    console.error('Error:', error)
+    const safeError = sanitizeError(error)
+    console.error('Token check error:', safeError)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 // POST - Save or update provider token
 export async function POST(request: NextRequest) {
+  // Apply strict rate limiting for token operations
+  const rateLimitResponse = rateLimiters.strict(request)
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     const supabase = await createClient()
 
@@ -59,42 +74,46 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { provider, token } = body
+    
+    // Validate input
+    const { provider, token } = validateInput(providerTokenSchema, body)
 
-    if (!provider || !token || !['github', 'gitlab'].includes(provider)) {
-      return NextResponse.json({ error: 'Provider and token are required' }, { status: 400 })
-    }
+    // Encrypt token before storing
+    const encryptedToken = encrypt(token)
 
     // Upsert token (insert or update if exists)
-    const { data: tokenRecord, error: upsertError } = await supabase
+    const { error: upsertError } = await supabase
       .from('provider_tokens')
       .upsert(
         {
           user_id: user.id,
           provider,
-          encrypted_token: token,
+          encrypted_token: encryptedToken,
         },
         {
           onConflict: 'user_id,provider',
         }
       )
-      .select()
-      .single()
 
     if (upsertError) {
-      console.error('Error upserting token:', upsertError)
       return NextResponse.json({ error: 'Failed to save token' }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, tokenRecord })
+    // SECURITY: Never return the token or encrypted value
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error:', error)
+    const safeError = sanitizeError(error)
+    console.error('Token save error:', safeError)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 // DELETE - Remove provider token
 export async function DELETE(request: NextRequest) {
+  // Apply strict rate limiting
+  const rateLimitResponse = rateLimiters.strict(request)
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     const supabase = await createClient()
 
@@ -110,7 +129,9 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get('provider')
 
-    if (!provider || !['github', 'gitlab'].includes(provider)) {
+    // Validate provider
+    const validation = validateInput(queryParamsSchema, { provider })
+    if (!validation.provider || !['github', 'gitlab'].includes(validation.provider)) {
       return NextResponse.json({ error: 'Valid provider (github/gitlab) is required' }, { status: 400 })
     }
 
@@ -118,16 +139,16 @@ export async function DELETE(request: NextRequest) {
       .from('provider_tokens')
       .delete()
       .eq('user_id', user.id)
-      .eq('provider', provider)
+      .eq('provider', validation.provider)
 
     if (error) {
-      console.error('Error deleting token:', error)
       return NextResponse.json({ error: 'Failed to delete token' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error:', error)
+    const safeError = sanitizeError(error)
+    console.error('Token deletion error:', safeError)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -122,6 +122,28 @@ export function formatAsMarkdown(
 
       // Add author info
       markdown += `  - _by ${commit.author.name}_\n`
+
+      // Add file changes if available
+      if (commit.files && commit.files.length > 0) {
+        markdown += `  - **Files changed:** ${commit.files.length}\n`
+        commit.files.forEach((file) => {
+          const statusBadge = file.status === 'added' ? '🟢' 
+            : file.status === 'modified' ? '🔵' 
+            : file.status === 'removed' ? '🔴'
+            : file.status === 'renamed' ? '🟡'
+            : '⚪'
+          
+          const changeStats = file.additions || file.deletions 
+            ? ` (+${file.additions || 0}/-${file.deletions || 0})`
+            : ''
+          
+          markdown += `    - ${statusBadge} \`${file.filename}\`${changeStats}\n`
+          
+          if (file.previous_filename && file.status === 'renamed') {
+            markdown += `      - _Renamed from \`${file.previous_filename}\`_\n`
+          }
+        })
+      }
     })
 
     markdown += `\n`

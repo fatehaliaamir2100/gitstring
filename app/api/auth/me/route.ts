@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { sanitizeError } from '@/lib/security'
 
 export async function GET() {
   try {
@@ -22,7 +23,6 @@ export async function GET() {
       .single()
 
     if (profileError) {
-      console.error('Profile error:', profileError)
       return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
     }
 
@@ -34,7 +34,8 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error('Error:', error)
+    const safeError = sanitizeError(error)
+    console.error('User profile error:', safeError)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
