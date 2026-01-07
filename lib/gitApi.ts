@@ -1,4 +1,5 @@
 import { GitHubCommit, GitLabCommit, GitCommit, FileChange } from './types'
+import { logger } from './logger'
 
 /**
  * Fetch detailed commit data from GitHub (includes files and diffs)
@@ -9,14 +10,24 @@ async function fetchGitHubCommitDetails(
   repo: string,
   sha: string
 ): Promise<{ files: FileChange[]; stats: { additions: number; deletions: number; total: number }; diff?: string }> {
+  const startTime = Date.now()
   const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github.v3+json',
   }
 
+  logger.externalApiCall('GitHub', `GET /repos/${owner}/${repo}/commits/${sha}`, { sha })
+  
   const response = await fetch(url, { headers })
-  if (!response.ok) return { files: [], stats: { additions: 0, deletions: 0, total: 0 } }
+  const duration = Date.now() - startTime
+  
+  logger.externalApiResponse('GitHub', 'commit details', response.status, duration, { sha })
+  
+  if (!response.ok) {
+    logger.warn('Failed to fetch commit details', { owner, repo, sha, status: response.status })
+    return { files: [], stats: { additions: 0, deletions: 0, total: 0 } }
+  }
 
   const data = await response.json()
 
@@ -29,6 +40,8 @@ async function fetchGitHubCommitDetails(
     patch: file.patch,
     previous_filename: file.previous_filename,
   }))
+
+  logger.debug('Fetched commit details', { sha, fileCount: files.length, additions: data.stats?.additions })
 
   return {
     files,
@@ -51,6 +64,9 @@ export async function fetchGitHubCommits(
   head?: string,
   includeDetails: boolean = true
 ): Promise<GitCommit[]> {
+  const startTime = Date.now()
+  logger.info('Fetching GitHub commits', { owner, repo, base, head, includeDetails })
+  
   const baseUrl = 'https://api.github.com'
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -70,6 +86,7 @@ export async function fetchGitHubCommits(
     const response = await fetch(url, { headers })
 
     if (!response.ok) {
+      logger.error('GitHub API error', new Error(`${response.status} ${response.statusText}`), { owner, repo, status: response.status })
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
     }
 
@@ -77,8 +94,13 @@ export async function fetchGitHubCommits(
 
     // Handle comparison response vs commits list
     const commits: GitHubCommit[] = data.commits || data
+    logger.info('Fetched GitHub commits', { count: commits.length, owner, repo })
 
     // Fetch detailed file information for each commit if requested
+    if (includeDetails) {
+      logger.debug('Enriching commits with file details', { commitCount: commits.length })
+    }
+    
     const enrichedCommits = await Promise.all(
       commits.map(async (commit: GitHubCommit) => {
         let details: { files: FileChange[]; stats: { additions: number; deletions: number; total: number }; diff?: string } = { 
@@ -90,7 +112,7 @@ export async function fetchGitHubCommits(
           try {
             details = await fetchGitHubCommitDetails(token, owner, repo, commit.sha)
           } catch (err) {
-            console.warn(`Failed to fetch details for commit ${commit.sha}`)
+            logger.warn(`Failed to fetch details for commit ${commit.sha}`, { sha: commit.sha, error: String(err) })
           }
         }
 
@@ -109,9 +131,17 @@ export async function fetchGitHubCommits(
       })
     )
 
+    const duration = Date.now() - startTime
+    logger.performance('fetchGitHubCommits', duration, { 
+      owner, 
+      repo, 
+      commitCount: enrichedCommits.length,
+      includeDetails 
+    })
+    
     return enrichedCommits
   } catch (error) {
-    console.error('Error fetching GitHub commits:', error)
+    logger.error('Error fetching GitHub commits', error, { owner, repo, base, head })
     throw error
   }
 }
@@ -189,15 +219,24 @@ async function fetchGitLabCommitDetails(
   projectId: string,
   sha: string
 ): Promise<{ files: FileChange[]; stats: { additions: number; deletions: number; total: number } }> {
+  const startTime = Date.now()
   const baseUrl = process.env.GITLAB_URL || 'https://gitlab.com'
   const url = `${baseUrl}/api/v4/projects/${encodeURIComponent(projectId)}/repository/commits/${sha}/diff`
   const headers = {
     'PRIVATE-TOKEN': token,
   }
 
+  logger.externalApiCall('GitLab', `GET /projects/${projectId}/commits/${sha}/diff`, { sha, projectId })
+  
   try {
     const response = await fetch(url, { headers })
-    if (!response.ok) return { files: [], stats: { additions: 0, deletions: 0, total: 0 } }
+    const duration = Date.now() - startTime
+    logger.externalApiResponse('GitLab', 'commit diff', response.status, duration, { sha })
+    
+    if (!response.ok) {
+      logger.warn('Failed to fetch GitLab commit details', { projectId, sha, status: response.status })
+      return { files: [], stats: { additions: 0, deletions: 0, total: 0 } }
+    }
 
     const diffs = await response.json()
 
@@ -223,6 +262,8 @@ async function fetchGitLabCommitDetails(
       }
     })
 
+    logger.debug('Fetched GitLab commit details', { sha, fileCount: files.length, totalAdditions, totalDeletions })
+
     return {
       files,
       stats: {
@@ -232,6 +273,7 @@ async function fetchGitLabCommitDetails(
       },
     }
   } catch (err) {
+    logger.warn('Error fetching GitLab commit details', { projectId, sha, error: String(err) })
     return { files: [], stats: { additions: 0, deletions: 0, total: 0 } }
   }
 }
@@ -247,6 +289,9 @@ export async function fetchGitLabCommits(
   until?: string,
   includeDetails: boolean = true
 ): Promise<GitCommit[]> {
+  const startTime = Date.now()
+  logger.info('Fetching GitLab commits', { projectId, refName, since, until, includeDetails })
+  
   const baseUrl = process.env.GITLAB_URL || 'https://gitlab.com'
   const headers = {
     'PRIVATE-TOKEN': token,
@@ -263,12 +308,18 @@ export async function fetchGitLabCommits(
     const response = await fetch(url, { headers })
 
     if (!response.ok) {
+      logger.error('GitLab API error', new Error(`${response.status} ${response.statusText}`), { projectId, status: response.status })
       throw new Error(`GitLab API error: ${response.status} ${response.statusText}`)
     }
 
     const commits: GitLabCommit[] = await response.json()
+    logger.info('Fetched GitLab commits', { count: commits.length, projectId })
 
     // Fetch detailed file information for each commit if requested
+    if (includeDetails) {
+      logger.debug('Enriching GitLab commits with file details', { commitCount: commits.length })
+    }
+    
     const enrichedCommits = await Promise.all(
       commits.map(async (commit: GitLabCommit) => {
         let details: { files: FileChange[]; stats: { additions: number; deletions: number; total: number } } = { 
@@ -280,7 +331,7 @@ export async function fetchGitLabCommits(
           try {
             details = await fetchGitLabCommitDetails(token, projectId, commit.id)
           } catch (err) {
-            console.warn(`Failed to fetch details for commit ${commit.id}`)
+            logger.warn(`Failed to fetch details for GitLab commit ${commit.id}`, { commitId: commit.id, error: String(err) })
           }
         }
 
@@ -299,9 +350,16 @@ export async function fetchGitLabCommits(
       })
     )
 
+    const duration = Date.now() - startTime
+    logger.performance('fetchGitLabCommits', duration, { 
+      projectId, 
+      commitCount: enrichedCommits.length,
+      includeDetails 
+    })
+
     return enrichedCommits
   } catch (error) {
-    console.error('Error fetching GitLab commits:', error)
+    logger.error('Error fetching GitLab commits', error, { projectId, refName })
     throw error
   }
 }

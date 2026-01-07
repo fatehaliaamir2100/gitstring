@@ -3,12 +3,19 @@ import { createClient } from '@/lib/supabase/server'
 import { encrypt, sanitizeError } from '@/lib/security'
 import { validateInput, queryParamsSchema, providerTokenSchema } from '@/lib/validation'
 import { rateLimiters } from '@/lib/rateLimit'
+import { logger } from '@/lib/logger'
 
 // GET - Check if provider token exists (NEVER returns actual token)
 export async function GET(request: NextRequest) {
+  const startTime = Date.now()
+  logger.apiRequest('GET', '/api/provider-tokens')
+  
   // Apply rate limiting
   const rateLimitResponse = rateLimiters.api(request)
-  if (rateLimitResponse) return rateLimitResponse
+  if (rateLimitResponse) {
+    logger.warn('Rate limit exceeded for provider-tokens GET')
+    return rateLimitResponse
+  }
 
   try {
     const supabase = await createClient()
@@ -43,6 +50,12 @@ export async function GET(request: NextRequest) {
     }
 
     // SECURITY: Never return the actual token, only metadata
+    const duration = Date.now() - startTime
+    logger.apiResponse('GET', '/api/provider-tokens', 200, duration, { 
+      hasToken: !!tokenRecord,
+      provider: validation.provider 
+    })
+    
     return NextResponse.json({ 
       hasToken: !!tokenRecord,
       createdAt: tokenRecord?.created_at || null,
@@ -50,16 +63,22 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     const safeError = sanitizeError(error)
-    console.error('Token check error:', safeError)
+    logger.error('Token check error', error, { safeError })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 // POST - Save or update provider token
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+  logger.apiRequest('POST', '/api/provider-tokens')
+  
   // Apply strict rate limiting for token operations
   const rateLimitResponse = rateLimiters.strict(request)
-  if (rateLimitResponse) return rateLimitResponse
+  if (rateLimitResponse) {
+    logger.warn('Rate limit exceeded for provider-tokens POST')
+    return rateLimitResponse
+  }
 
   try {
     const supabase = await createClient()
@@ -77,11 +96,17 @@ export async function POST(request: NextRequest) {
     
     // Validate input
     const { provider, token } = validateInput(providerTokenSchema, body)
+    
+    logger.info('Saving provider token', { provider, userId: user.id, tokenLength: token?.length })
 
     // Encrypt token before storing
+    logger.debug('Encrypting provider token', { provider })
     const encryptedToken = encrypt(token)
+    logger.debug('Token encrypted successfully', { provider, encryptedLength: encryptedToken.length })
 
     // Upsert token (insert or update if exists)
+    logger.dbQuery('UPSERT', 'provider_tokens', { userId: user.id, provider })
+    const dbStartTime = Date.now()
     const { error: upsertError } = await supabase
       .from('provider_tokens')
       .upsert(
@@ -94,16 +119,19 @@ export async function POST(request: NextRequest) {
           onConflict: 'user_id,provider',
         }
       )
+    logger.dbQueryComplete('UPSERT', 'provider_tokens', Date.now() - dbStartTime)
 
     if (upsertError) {
+      logger.error('Failed to save provider token', upsertError, { userId: user.id, provider })
       return NextResponse.json({ error: 'Failed to save token' }, { status: 500 })
     }
 
+    logger.info('Provider token saved successfully', { provider, userId: user.id })
     // SECURITY: Never return the token or encrypted value
     return NextResponse.json({ success: true })
   } catch (error) {
     const safeError = sanitizeError(error)
-    console.error('Token save error:', safeError)
+    logger.error('Token save error', error, { safeError })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

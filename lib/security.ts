@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { logger } from './logger'
 
 /**
  * Security utility functions for encryption and token handling
@@ -15,6 +16,10 @@ const TAG_POSITION = SALT_LENGTH + IV_LENGTH
 const ENCRYPTED_POSITION = TAG_POSITION + TAG_LENGTH
 
 if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
+  logger.securityEvent('Encryption key not properly configured', {
+    keyLength: ENCRYPTION_KEY?.length,
+    configured: !!process.env.TOKEN_ENCRYPTION_KEY
+  })
   console.error('⚠️  WARNING: TOKEN_ENCRYPTION_KEY not properly configured!')
 }
 
@@ -24,7 +29,9 @@ if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
  * @returns Encrypted string with salt, IV, and auth tag
  */
 export function encrypt(text: string): string {
+  const startTime = Date.now()
   try {
+    logger.debug('Starting encryption operation')
     const iv = crypto.randomBytes(IV_LENGTH)
     const salt = crypto.randomBytes(SALT_LENGTH)
 
@@ -34,9 +41,11 @@ export function encrypt(text: string): string {
     const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()])
     const tag = cipher.getAuthTag()
 
+    const duration = Date.now() - startTime
+    logger.debug('Encryption completed', { duration })
     return Buffer.concat([salt, iv, tag, encrypted]).toString('base64')
   } catch (error) {
-    console.error('Encryption failed')
+    logger.error('Encryption failed', error, { duration: Date.now() - startTime })
     throw new Error('Failed to encrypt data')
   }
 }
@@ -47,7 +56,9 @@ export function encrypt(text: string): string {
  * @returns Decrypted plain text
  */
 export function decrypt(encryptedData: string): string {
+  const startTime = Date.now()
   try {
+    logger.debug('Starting decryption operation')
     const buffer = Buffer.from(encryptedData, 'base64')
 
     const salt = buffer.subarray(0, SALT_LENGTH)
@@ -59,9 +70,12 @@ export function decrypt(encryptedData: string): string {
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv)
     decipher.setAuthTag(tag)
 
-    return decipher.update(encrypted) + decipher.final('utf8')
+    const result = decipher.update(encrypted) + decipher.final('utf8')
+    const duration = Date.now() - startTime
+    logger.debug('Decryption completed', { duration })
+    return result
   } catch (error) {
-    console.error('Decryption failed')
+    logger.error('Decryption failed', error, { duration: Date.now() - startTime })
     throw new Error('Failed to decrypt data')
   }
 }
@@ -87,16 +101,23 @@ export function generateSecureToken(length: number = 32): string {
  * Removes potential tokens from error strings
  */
 export function sanitizeError(error: any): string {
+  logger.debug('Sanitizing error message')
   if (!error) return 'An error occurred'
   
   const message = error.message || error.toString()
   
   // Remove anything that looks like a token (base64, hex strings > 20 chars)
-  return message
+  const sanitized = message
     .replace(/[A-Za-z0-9+/=]{40,}/g, '[REDACTED]')
     .replace(/[0-9a-f]{40,}/gi, '[REDACTED]')
     .replace(/ghp_[A-Za-z0-9]{36}/g, '[REDACTED]')
     .replace(/glpat-[A-Za-z0-9_-]{20,}/g, '[REDACTED]')
+  
+  if (sanitized !== message) {
+    logger.securityEvent('Sensitive data redacted from error message')
+  }
+  
+  return sanitized
 }
 
 /**

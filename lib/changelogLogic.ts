@@ -1,10 +1,14 @@
 import { GitCommit, CommitGroup, ChangelogJsonData } from './types'
 import { marked } from 'marked'
+import { logger } from './logger'
 
 /**
  * Group commits by conventional commit types
  */
 export function groupCommitsByType(commits: GitCommit[]): CommitGroup[] {
+  const startTime = Date.now()
+  logger.debug('Grouping commits by type', { commitCount: commits.length })
+  
   const groups: Record<string, GitCommit[]> = {
     features: [],
     fixes: [],
@@ -87,6 +91,13 @@ export function groupCommitsByType(commits: GitCommit[]): CommitGroup[] {
     }
   })
 
+  const duration = Date.now() - startTime
+  logger.debug('Commits grouped successfully', { 
+    groupCount: result.length, 
+    totalCommits: commits.length,
+    duration 
+  })
+
   return result
 }
 
@@ -99,6 +110,9 @@ export function formatAsMarkdown(
   startRef?: string,
   endRef?: string
 ): string {
+  const startTime = Date.now()
+  logger.debug('Formatting changelog as markdown', { groupCount: groups.length, repoName })
+  
   const date = new Date().toISOString().split('T')[0]
   let markdown = `# Changelog\n\n`
   markdown += `**Repository:** ${repoName}\n`
@@ -149,6 +163,9 @@ export function formatAsMarkdown(
     markdown += `\n`
   })
 
+  const duration = Date.now() - startTime
+  logger.debug('Markdown formatting completed', { duration, markdownLength: markdown.length })
+
   return markdown
 }
 
@@ -156,7 +173,13 @@ export function formatAsMarkdown(
  * Convert Markdown to HTML
  */
 export async function markdownToHtml(markdown: string): Promise<string> {
+  const startTime = Date.now()
+  logger.debug('Converting markdown to HTML', { markdownLength: markdown.length })
+  
   const html = await marked(markdown)
+  
+  const duration = Date.now() - startTime
+  logger.debug('HTML conversion completed', { duration, htmlLength: html.length })
   
   // Wrap in a styled container
   return `

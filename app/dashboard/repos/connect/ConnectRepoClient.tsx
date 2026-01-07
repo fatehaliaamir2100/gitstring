@@ -24,7 +24,6 @@ export default function ConnectRepoClient() {
   const [repos, setRepos] = useState<GitRepo[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [accessToken, setAccessToken] = useState('')
-  const [savedToken, setSavedToken] = useState<string | null>(null)
   const [hasToken, setHasToken] = useState(false)
   const [showTokenInput, setShowTokenInput] = useState(false)
   const [showManual, setShowManual] = useState(false)
@@ -36,31 +35,27 @@ export default function ConnectRepoClient() {
     repoUrl: '',
   })
 
-  // Load saved token on mount and when provider changes
+  // Load saved token status on mount and when provider changes
   useEffect(() => {
-    loadSavedToken()
+    checkTokenStatus()
   }, [provider])
 
-  const loadSavedToken = async () => {
+  const checkTokenStatus = async () => {
     try {
       const response = await fetch(`/api/provider-tokens?provider=${provider}`)
       const data = await response.json()
 
-      if (response.ok && data.hasToken && data.token) {
-        setSavedToken(data.token)
-        setAccessToken(data.token)
+      if (response.ok && data.hasToken) {
         setHasToken(true)
         setShowTokenInput(false)
         // Auto-fetch repos if token exists
-        fetchReposWithToken(data.token)
+        await discoverRepos()
       } else {
-        setSavedToken(null)
-        setAccessToken('')
         setHasToken(false)
         setShowTokenInput(true)
       }
     } catch (error) {
-      console.error('Error loading saved token:', error)
+      console.error('Error checking token status:', error)
       setShowTokenInput(true)
     }
   }
@@ -74,12 +69,44 @@ export default function ConnectRepoClient() {
       })
 
       if (response.ok) {
-        setSavedToken(token)
         setHasToken(true)
         setShowTokenInput(false)
+        setAccessToken('') // Clear from memory
+        // Now discover repos using the saved token
+        await discoverRepos()
+      } else {
+        alert('Failed to save token')
       }
     } catch (error) {
       console.error('Error saving token:', error)
+      alert('Failed to save token')
+    }
+  }
+
+  const discoverRepos = async () => {
+    setIsLoading(true)
+    try {
+      // Use server-side endpoint that uses stored encrypted token
+      const response = await fetch(`/api/repos/discover?provider=${provider}`)
+      
+      if (!response.ok) {
+        const data = await response.json()
+        if (data.needsToken) {
+          setHasToken(false)
+          setShowTokenInput(true)
+          alert('Please enter your access token to discover repositories')
+          return
+        }
+        throw new Error(`Failed to discover repositories: ${response.status}`)
+      }
+
+      const data = await response.json()
+      setRepos(data.repos || [])
+    } catch (error) {
+      console.error('Error discovering repos:', error)
+      alert('Failed to discover repositories. Please try again.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -94,8 +121,6 @@ export default function ConnectRepoClient() {
       })
 
       if (response.ok) {
-        setSavedToken(null)
-        setAccessToken('')
         setHasToken(false)
         setShowTokenInput(true)
         setRepos([])
@@ -106,87 +131,29 @@ export default function ConnectRepoClient() {
     }
   }
 
-  const fetchReposWithToken = async (token: string) => {
-    setIsLoading(true)
-    try {
-      const url =
-        provider === 'github'
-          ? 'https://api.github.com/user/repos?per_page=100&sort=updated'
-          : 'https://gitlab.com/api/v4/projects?membership=true&per_page=100&order_by=updated_at'
-
-      const headers =
-        provider === 'github'
-          ? {
-              Authorization: `Bearer ${token}`,
-              Accept: 'application/vnd.github.v3+json',
-            }
-          : {
-              'PRIVATE-TOKEN': token,
-            }
-
-      const response = await fetch(url, { headers })
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch repositories: ${response.status}`)
-      }
-
-      const data = await response.json()
-
-      // Normalize GitLab response to match GitHub format
-      const normalizedRepos = data.map((repo: any) => {
-        if (provider === 'gitlab') {
-          return {
-            id: repo.id,
-            name: repo.name,
-            full_name: repo.path_with_namespace,
-            owner: {
-              login: repo.namespace.path,
-            },
-            default_branch: repo.default_branch || 'main',
-            private: repo.visibility === 'private',
-            html_url: repo.web_url,
-          }
-        }
-        return repo
-      })
-
-      setRepos(normalizedRepos)
-    } catch (error) {
-      console.error('Error fetching repos:', error)
-      alert('Failed to fetch repositories. Check your access token and try again.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const fetchRepos = async () => {
+  const handleTokenSubmit = async () => {
     if (!accessToken) {
       alert('Please enter an access token')
       return
     }
 
-    // Save token for future use
+    // Save token securely on server
     await saveToken(accessToken)
-    
-    // Fetch repos with the token
-    await fetchReposWithToken(accessToken)
   }
 
   const refreshRepos = async () => {
-    if (!accessToken && !savedToken) {
+    if (!hasToken) {
       alert('No token available. Please enter an access token.')
       return
     }
 
-    const tokenToUse = accessToken || savedToken
-    if (tokenToUse) {
-      await fetchReposWithToken(tokenToUse)
-    }
+    await discoverRepos()
   }
 
   const connectRepo = async (repo: GitRepo) => {
     setIsLoading(true)
     try {
+      // Server will use stored encrypted token - no need to send it from client
       const response = await fetch('/api/repos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -194,7 +161,6 @@ export default function ConnectRepoClient() {
           provider,
           repoName: repo.name,
           repoOwner: repo.owner.login,
-          accessToken,
           isPrivate: repo.private,
           defaultBranch: repo.default_branch,
           repoUrl: repo.html_url,
@@ -217,13 +183,19 @@ export default function ConnectRepoClient() {
   }
 
   const connectManualRepo = async () => {
-    if (!manualForm.repoOwner || !manualForm.repoName || !accessToken) {
-      alert('Please fill in repository owner, name, and access token')
+    if (!manualForm.repoOwner || !manualForm.repoName) {
+      alert('Please fill in repository owner and name')
+      return
+    }
+
+    if (!hasToken) {
+      alert('Please save your access token first')
       return
     }
 
     setIsLoading(true)
     try {
+      // Server will use stored encrypted token - no need to send it from client
       const response = await fetch('/api/repos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -231,7 +203,6 @@ export default function ConnectRepoClient() {
           provider,
           repoName: manualForm.repoName,
           repoOwner: manualForm.repoOwner,
-          accessToken,
           isPrivate: manualForm.isPrivate,
           defaultBranch: manualForm.defaultBranch || 'main',
           repoUrl: manualForm.repoUrl,
@@ -380,7 +351,7 @@ export default function ConnectRepoClient() {
           <div className="flex gap-3">
             {!hasToken || showTokenInput ? (
               <button
-                onClick={fetchRepos}
+                onClick={handleTokenSubmit}
                 disabled={isLoading || !accessToken}
                 className="btn-primary flex-1 flex items-center justify-center gap-2"
               >
@@ -392,7 +363,7 @@ export default function ConnectRepoClient() {
                 ) : (
                   <>
                     <Search className="w-5 h-5" />
-                    Save Token & Fetch Repositories
+                    Save Token & Discover Repositories
                   </>
                 )}
               </button>

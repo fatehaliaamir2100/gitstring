@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { CommitGroup, GitCommit } from './types'
+import { logger } from './logger'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -12,8 +13,14 @@ export async function generateAiSummaryWithDiffs(
   groups: CommitGroup[],
   repoName: string
 ): Promise<string> {
+  const startTime = Date.now()
+  logger.info('Starting AI changelog generation with diffs', { repoName, groupCount: groups.length })
+  
   try {
     // Prepare detailed commit data including file changes
+    const totalCommits = groups.reduce((sum, g) => sum + g.commits.length, 0)
+    logger.debug('Preparing commit data for AI', { totalCommits, groupCount: groups.length })
+    
     const commitDetails = groups
       .map((group) => {
         const commits = group.commits
@@ -48,6 +55,9 @@ Generate a well-structured, professional changelog in Markdown format that:
 
 Focus on the impact and purpose of changes, not just listing commit messages.`
 
+    logger.externalApiCall('OpenAI', 'POST /chat/completions', { model: 'gpt-4o-mini', repoName })
+    const apiStartTime = Date.now()
+    
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
@@ -64,9 +74,22 @@ Focus on the impact and purpose of changes, not just listing commit messages.`
       max_tokens: 3000,
     })
 
+    const apiDuration = Date.now() - apiStartTime
+    logger.externalApiResponse('OpenAI', 'chat completions', 200, apiDuration, { 
+      model: 'gpt-4o-mini',
+      tokensUsed: response.usage?.total_tokens 
+    })
+
+    const totalDuration = Date.now() - startTime
+    logger.performance('generateAiSummaryWithDiffs', totalDuration, { 
+      repoName,
+      groupCount: groups.length,
+      tokensUsed: response.usage?.total_tokens 
+    })
+
     return response.choices[0].message.content || ''
   } catch (error) {
-    console.error('Error generating AI summary with diffs:', error)
+    logger.error('Error generating AI summary with diffs', error, { repoName, groupCount: groups.length })
     throw new Error('Failed to generate AI summary')
   }
 }

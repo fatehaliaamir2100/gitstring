@@ -1,12 +1,24 @@
 import { updateSession } from '@/lib/supabase/middleware'
 import { NextRequest, NextResponse } from 'next/server'
+import { logger } from '@/lib/logger'
 
 export async function middleware(request: NextRequest) {
+  const startTime = Date.now()
+  const { pathname } = request.nextUrl
+  
+  logger.debug('Middleware processing request', { 
+    method: request.method,
+    pathname,
+    userAgent: request.headers.get('user-agent')?.substring(0, 50)
+  })
+
   // Update Supabase session
   const response = await updateSession(request)
 
   // Add security headers
   const headers = new Headers(response.headers)
+  
+  logger.debug('Adding security headers', { pathname })
   
   // Prevent clickjacking
   headers.set('X-Frame-Options', 'DENY')
@@ -40,6 +52,12 @@ export async function middleware(request: NextRequest) {
   // Strict Transport Security (HSTS) - only in production
   if (process.env.NODE_ENV === 'production') {
     headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+    logger.debug('HSTS header added', { pathname })
+  }
+
+  const duration = Date.now() - startTime
+  if (duration > 100) {
+    logger.warn('Slow middleware execution', { pathname, duration })
   }
 
   return NextResponse.next({
