@@ -11,12 +11,14 @@ A powerful micro-SaaS tool that transforms your Git commits into professional, A
 ## ✨ Features
 
 - 🔗 **Multi-Platform Support** - Connect GitHub and GitLab (including self-hosted)
-- 🤖 **AI-Powered Summaries** - Generate human-friendly changelogs using OpenAI
-- 📝 **Multiple Export Formats** - Markdown, HTML, and JSON
+- 🤖 **Dual AI Support** - Use OpenAI (cloud) or Ollama (local & free) for AI-powered changelogs
+- � **User-Controlled AI** - Each user can choose their preferred AI provider from the UI
+- �📝 **Multiple Export Formats** - Markdown, HTML, and JSON
 - 🏷️ **Flexible Commit Ranges** - Compare tags, branches, or specific commits
 - 🔒 **Public & Private** - Share changelogs publicly or keep them private
 - 🎨 **Beautiful UI** - Built with Next.js and Tailwind CSS
 - ⚡ **Fast & Scalable** - Powered by Supabase and Vercel
+- 💰 **Cost Flexible** - Choose between cloud AI (OpenAI) or free local AI (Ollama)
 
 ## 🛠️ Tech Stack
 
@@ -26,7 +28,7 @@ A powerful micro-SaaS tool that transforms your Git commits into professional, A
 | Database | Supabase (PostgreSQL) |
 | Authentication | Supabase Auth (OAuth) |
 | Backend | Next.js API Routes |
-| APIs | GitHub API, GitLab API, OpenAI API |
+| APIs | GitHub API, GitLab API, OpenAI API, Ollama |
 | Deployment | Vercel + Supabase |
 
 ## 📁 Project Structure
@@ -46,6 +48,7 @@ A powerful micro-SaaS tool that transforms your Git commits into professional, A
 │   ├── supabase/              # Supabase client setup
 │   ├── gitApi.ts              # GitHub/GitLab API helpers
 │   ├── changelogLogic.ts      # Commit grouping & formatting
+│   ├── aiProvider.ts          # AI provider abstraction (OpenAI/Ollama)
 │   ├── openaiHelper.ts        # AI enhancement functions
 │   └── types.ts               # TypeScript types
 ├── components/                # Reusable UI components
@@ -61,7 +64,9 @@ A powerful micro-SaaS tool that transforms your Git commits into professional, A
 - Node.js 18+ and npm/pnpm/yarn
 - A Supabase account (free tier works)
 - GitHub/GitLab OAuth apps
-- OpenAI API key (optional, for AI features)
+- **AI Provider (choose one)**:
+  - OpenAI API key (cloud-based, costs apply)
+  - Ollama installed locally (free, runs on your machine)
 
 ### 1. Clone the Repository
 
@@ -131,12 +136,22 @@ GITHUB_CLIENT_SECRET=your_github_client_secret
 GITLAB_CLIENT_ID=your_gitlab_client_id
 GITLAB_CLIENT_SECRET=your_gitlab_client_secret
 
-# OpenAI (Optional)
+# AI Provider (choose 'openai' or 'ollama')
+AI_PROVIDER=ollama
+
+# OpenAI (if using AI_PROVIDER=openai)
 OPENAI_API_KEY=sk-your_openai_key
+OPENAI_MODEL=gpt-4o-mini
+
+# Ollama (if using AI_PROVIDER=ollama)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
 
 # App URL
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
+
+> 💡 **See [AI_CONFIGURATION.md](AI_CONFIGURATION.md) for detailed AI setup guide including Ollama installation and model recommendations.**
 
 ### 6. Configure Supabase OAuth Providers
 

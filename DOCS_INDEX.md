@@ -7,6 +7,14 @@ Welcome to GitString! This index helps you find the right documentation for your
 ### Get Started
 - **[GETTING_STARTED.md](GETTING_STARTED.md)** - Complete walkthrough from zero to running app (15 minutes)
 - **[SETUP.md](SETUP.md)** - Quick reference for local development setup (5 minutes)
+- **[OLLAMA_QUICKSTART.md](OLLAMA_QUICKSTART.md)** - Get free local AI running in 5 minutes
+
+### Configure AI Features
+- **[AI_CONFIGURATION.md](AI_CONFIGURATION.md)** - Complete guide to OpenAI and Ollama setup
+- **[OLLAMA_QUICKSTART.md](OLLAMA_QUICKSTART.md)** - Quick start guide for Ollama (local & free)
+- **[AI_PROVIDER_COMPARISON.md](AI_PROVIDER_COMPARISON.md)** - Help choosing between OpenAI and Ollama
+- **[USER_AI_SELECTION.md](USER_AI_SELECTION.md)** - User-controlled AI provider selection
+- **[TESTING_AI_SETUP.md](TESTING_AI_SETUP.md)** - Verify your AI setup is working
 
 ### Understand the Project
 - **[README.md](README.md)** - Overview, features, and complete documentation
@@ -33,9 +41,10 @@ Welcome to GitString! This index helps you find the right documentation for your
 
 Start here in this order:
 1. [GETTING_STARTED.md](GETTING_STARTED.md) - Get it running
-2. [README.md](README.md) - Understand what you built
-3. [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) - Deep dive into architecture
-4. [API.md](API.md) - Learn the API
+2. [OLLAMA_QUICKSTART.md](OLLAMA_QUICKSTART.md) - Add free AI (optional)
+3. [README.md](README.md) - Understand what you built
+4. [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) - Deep dive into architecture
+5. [API.md](API.md) - Learn the API
 
 ### 🚀 DevOps / Deploying
 

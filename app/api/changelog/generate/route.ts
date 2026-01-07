@@ -9,6 +9,8 @@ import { sanitizeError } from '@/lib/security'
 import { rateLimiters } from '@/lib/rateLimit'
 import { logger, measureTime } from '@/lib/logger'
 import { CommitCache, ChangelogCache } from '@/lib/cache'
+import { aiProvider } from '@/lib/aiProvider'
+import { getUserAiProvider } from '@/lib/userAiPreferences'
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -144,11 +146,35 @@ export async function POST(request: NextRequest) {
     // Generate changelog in different formats
     let markdown: string
 
-    if (useAi && process.env.OPENAI_API_KEY) {
-      logger.info('Generating AI-enhanced changelog', { repoId, useAi: true })
-      // Use AI to generate enhanced changelog with code analysis
-      markdown = await generateAiSummaryWithDiffs(groups, repo.repo_full_name)
-      logger.info('AI changelog generated successfully')
+    if (useAi) {
+      // Get user's AI provider preference
+      const { provider: userProvider, model: userModel } = await getUserAiProvider(user.id)
+      
+      // Check if the preferred provider is available
+      if (aiProvider.isProviderAvailable(userProvider)) {
+        logger.info('Generating AI-enhanced changelog', { 
+          repoId, 
+          useAi: true, 
+          provider: userProvider,
+          model: userModel 
+        })
+        
+        // Use AI to generate enhanced changelog with code analysis
+        markdown = await generateAiSummaryWithDiffs(
+          groups, 
+          repo.repo_full_name,
+          userProvider,
+          userModel
+        )
+        logger.info('AI changelog generated successfully', { provider: userProvider })
+      } else {
+        logger.warn('AI requested but provider not available, falling back to rule-based', { 
+          provider: userProvider 
+        })
+        // Use rule-based formatting as fallback
+        markdown = formatAsMarkdown(groups, repo.repo_full_name, startRef, endRef)
+        logger.info('Rule-based changelog generated successfully (AI fallback)')
+      }
     } else {
       logger.info('Generating rule-based changelog', { repoId, useAi: false })
       // Use rule-based formatting

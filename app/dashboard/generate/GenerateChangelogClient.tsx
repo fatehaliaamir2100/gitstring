@@ -25,9 +25,50 @@ export default function GenerateChangelogClient({ repos }: { repos: Repo[] }) {
   const [endRef, setEndRef] = useState('')
   const [title, setTitle] = useState('')
   const [useAi, setUseAi] = useState(false)
+  const [aiProvider, setAiProvider] = useState<'default' | 'openai' | 'ollama'>('default')
   const [isLoading, setIsLoading] = useState(false)
   const [refs, setRefs] = useState<any[]>([])
   const [loadingRefs, setLoadingRefs] = useState(false)
+  const [availableProviders, setAvailableProviders] = useState<any[]>([])
+
+  // Fetch user preferences and available providers on mount
+  useEffect(() => {
+    fetchUserPreferences()
+    fetchAvailableProviders()
+  }, [])
+
+  const fetchUserPreferences = async () => {
+    try {
+      const response = await fetch('/api/user/preferences')
+      if (response.ok) {
+        const data = await response.json()
+        setAiProvider(data.ai_provider || 'default')
+      }
+    } catch (error) {
+      console.error('Error fetching user preferences:', error)
+    }
+  }
+
+  const fetchAvailableProviders = async () => {
+    // This could be an API call, but for now we'll show all options
+    setAvailableProviders([
+      { value: 'default', label: 'System Default', description: 'Use the server configuration' },
+      { value: 'openai', label: 'OpenAI', description: 'Cloud-based, high quality (costs apply)' },
+      { value: 'ollama', label: 'Ollama', description: 'Local, free, requires setup' },
+    ])
+  }
+
+  const saveAiProviderPreference = async (provider: string) => {
+    try {
+      await fetch('/api/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ai_provider: provider }),
+      })
+    } catch (error) {
+      console.error('Error saving AI provider preference:', error)
+    }
+  }
 
   // Fetch refs when repo or refType changes
   useEffect(() => {
@@ -235,7 +276,7 @@ export default function GenerateChangelogClient({ repos }: { repos: Repo[] }) {
           )}
 
           {/* AI Enhancement */}
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-4">
             <label className="flex items-center cursor-pointer">
               <input
                 type="checkbox"
@@ -249,10 +290,39 @@ export default function GenerateChangelogClient({ repos }: { repos: Repo[] }) {
                   <span className="font-medium text-gray-900">Use AI Enhancement</span>
                 </div>
                 <p className="text-sm text-gray-600">
-                  Generate human-friendly summaries using OpenAI (requires API key)
+                  Generate human-friendly summaries and insights
                 </p>
               </div>
             </label>
+
+            {/* AI Provider Selection - Only show when AI is enabled */}
+            {useAi && (
+              <div className="ml-8 pt-3 border-t border-purple-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  AI Provider
+                </label>
+                <select
+                  value={aiProvider}
+                  onChange={(e) => {
+                    const newProvider = e.target.value as 'default' | 'openai' | 'ollama'
+                    setAiProvider(newProvider)
+                    saveAiProviderPreference(newProvider)
+                  }}
+                  className="input text-gray-900 text-sm"
+                >
+                  {availableProviders.map((provider) => (
+                    <option key={provider.value} value={provider.value}>
+                      {provider.label} - {provider.description}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-2">
+                  {aiProvider === 'default' && '📋 Uses server configuration (check .env settings)'}
+                  {aiProvider === 'openai' && '☁️ Requires OpenAI API key configured on server'}
+                  {aiProvider === 'ollama' && '🏠 Requires Ollama running locally on server'}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Submit Button */}

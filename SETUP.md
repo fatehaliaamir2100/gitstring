@@ -61,8 +61,16 @@ GITHUB_CLIENT_SECRET=xxxxx
 GITLAB_CLIENT_ID=
 GITLAB_CLIENT_SECRET=
 
-# OpenAI (optional - get from platform.openai.com)
+# AI Provider (choose 'openai' or 'ollama')
+AI_PROVIDER=ollama
+
+# OpenAI (if using AI_PROVIDER=openai)
 OPENAI_API_KEY=sk-xxxxx
+OPENAI_MODEL=gpt-4o-mini
+
+# Ollama (if using AI_PROVIDER=ollama)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
 
 # Local dev
 NEXT_PUBLIC_APP_URL=http://localhost:3000
@@ -113,20 +121,48 @@ If you want GitLab support:
 3. Add Application ID and Secret to `.env.local`
 4. Enable GitLab in Supabase Authentication > Providers
 
-## Optional: OpenAI Setup
+## AI Provider Setup (Choose One)
 
-For AI-powered changelogs:
+For AI-powered changelogs, choose between OpenAI (cloud) or Ollama (local):
+
+### Option A: OpenAI (Cloud-Based)
 
 1. Go to [platform.openai.com](https://platform.openai.com)
 2. Create account or sign in
 3. Go to API Keys
 4. Create new key
-5. Add to `.env.local` as `OPENAI_API_KEY`
+5. Add to `.env.local`:
+```env
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-xxxxx
+OPENAI_MODEL=gpt-4o-mini
+```
 6. Add credits to your OpenAI account ($5-10 is plenty to start)
+
+**Pros**: High quality, fast, no local setup
+**Cons**: Costs money per API call
+
+### Option B: Ollama (Local & Free)
+
+1. Install Ollama from [ollama.ai](https://ollama.ai)
+2. Pull a model: `ollama pull llama3.2`
+3. Add to `.env.local`:
+```env
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+```
+4. Start Ollama: `ollama serve` (or it starts automatically)
+
+**Pros**: Free, private, no API limits
+**Cons**: Requires local installation, needs 8GB+ RAM
+
+> 📖 **Full AI configuration guide**: See [AI_CONFIGURATION.md](AI_CONFIGURATION.md) for detailed setup, model recommendations, and troubleshooting.
 
 ## What's Next?
 
 - Read the full [README.md](README.md) for more details
+- Check [AI_CONFIGURATION.md](AI_CONFIGURATION.md) for AI setup details
 - Check [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment
 - Customize the UI in `app/` folder
 - Add features in `lib/` folder

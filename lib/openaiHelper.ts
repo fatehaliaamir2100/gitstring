@@ -1,20 +1,30 @@
-import OpenAI from 'openai'
 import { CommitGroup, GitCommit } from './types'
 import { logger } from './logger'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+import { aiProvider, AIProvider } from './aiProvider'
 
 /**
- * Generate AI-enhanced changelog summary using OpenAI with code diff analysis
+ * Generate AI-enhanced changelog summary with code diff analysis
+ * @param groups - Grouped commits
+ * @param repoName - Repository name
+ * @param provider - Optional AI provider override
+ * @param model - Optional model override
  */
 export async function generateAiSummaryWithDiffs(
   groups: CommitGroup[],
-  repoName: string
+  repoName: string,
+  provider?: AIProvider,
+  model?: string
 ): Promise<string> {
   const startTime = Date.now()
-  logger.info('Starting AI changelog generation with diffs', { repoName, groupCount: groups.length })
+  const effectiveProvider = provider || aiProvider.getProvider()
+  const effectiveModel = model || aiProvider.getDefaultModel(effectiveProvider)
+  
+  logger.info('Starting AI changelog generation with diffs', { 
+    repoName, 
+    groupCount: groups.length,
+    provider: effectiveProvider,
+    model: effectiveModel
+  })
   
   try {
     // Prepare detailed commit data including file changes
@@ -55,11 +65,14 @@ Generate a well-structured, professional changelog in Markdown format that:
 
 Focus on the impact and purpose of changes, not just listing commit messages.`
 
-    logger.externalApiCall('OpenAI', 'POST /chat/completions', { model: 'gpt-4o-mini', repoName })
+    logger.externalApiCall(effectiveProvider, 'chat completion', { 
+      model: effectiveModel, 
+      repoName 
+    })
     const apiStartTime = Date.now()
     
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const response = await aiProvider.chatCompletion({
+      model: effectiveModel,
       messages: [
         {
           role: 'system',
@@ -72,25 +85,36 @@ Focus on the impact and purpose of changes, not just listing commit messages.`
       ],
       temperature: 0.7,
       max_tokens: 3000,
-    })
+    }, provider)
 
     const apiDuration = Date.now() - apiStartTime
-    logger.externalApiResponse('OpenAI', 'chat completions', 200, apiDuration, { 
-      model: 'gpt-4o-mini',
-      tokensUsed: response.usage?.total_tokens 
+    logger.externalApiResponse(effectiveProvider, 'chat completions', 200, apiDuration, { 
+      model: effectiveModel,
+      tokensUsed: response.tokensUsed 
     })
 
     const totalDuration = Date.now() - startTime
     logger.performance('generateAiSummaryWithDiffs', totalDuration, { 
       repoName,
       groupCount: groups.length,
-      tokensUsed: response.usage?.total_tokens 
+      provider: effectiveProvider,
+      tokensUsed: response.tokensUsed 
     })
 
-    return response.choices[0].message.content || ''
+    return response.content
   } catch (error) {
-    logger.error('Error generating AI summary with diffs', error, { repoName, groupCount: groups.length })
-    throw new Error('Failed to generate AI summary')
+    logger.error('Error generating AI summary with diffs', error, { 
+      repoName, 
+      groupCount: groups.length,
+      provider: effectiveProvider
+    })
+    
+    // Provide more helpful error message based on provider
+    if (effectiveProvider === 'ollama') {
+      throw new Error('Failed to generate AI summary. Please ensure Ollama is running (try: ollama serve) and the model is pulled (try: ollama pull llama3.2)')
+    } else {
+      throw new Error('Failed to generate AI summary. Please check your OpenAI API key and account credits.')
+    }
   }
 }
 
@@ -127,8 +151,8 @@ Generate a well-structured, professional changelog in Markdown format that:
 
 Format the output as clean Markdown.`
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const response = await aiProvider.chatCompletion({
+      model: aiProvider.getDefaultModel(),
       messages: [
         {
           role: 'system',
@@ -143,7 +167,7 @@ Format the output as clean Markdown.`
       max_tokens: 2000,
     })
 
-    return response.choices[0].message.content || ''
+    return response.content
   } catch (error) {
     console.error('Error generating AI summary:', error)
     throw new Error('Failed to generate AI summary')
@@ -172,8 +196,8 @@ ${filesSummary}
 
 Provide a single sentence that explains the purpose and impact of this commit.`
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const response = await aiProvider.chatCompletion({
+      model: aiProvider.getDefaultModel(),
       messages: [
         {
           role: 'system',
@@ -188,7 +212,7 @@ Provide a single sentence that explains the purpose and impact of this commit.`
       max_tokens: 150,
     })
 
-    return response.choices[0].message.content || commit.message.split('\n')[0]
+    return response.content
   } catch (error) {
     console.error('Error analyzing commit changes:', error)
     return commit.message.split('\n')[0]
@@ -200,8 +224,8 @@ Provide a single sentence that explains the purpose and impact of this commit.`
  */
 export async function summarizeCommit(commit: GitCommit): Promise<string> {
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const response = await aiProvider.chatCompletion({
+      model: aiProvider.getDefaultModel(),
       messages: [
         {
           role: 'system',
@@ -216,7 +240,7 @@ export async function summarizeCommit(commit: GitCommit): Promise<string> {
       max_tokens: 100,
     })
 
-    return response.choices[0].message.content || commit.message
+    return response.content
   } catch (error) {
     console.error('Error summarizing commit:', error)
     return commit.message.split('\n')[0]
@@ -255,8 +279,8 @@ Generate professional release notes that:
 
 Format as Markdown.`
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const response = await aiProvider.chatCompletion({
+      model: aiProvider.getDefaultModel(),
       messages: [
         {
           role: 'system',
@@ -271,7 +295,7 @@ Format as Markdown.`
       max_tokens: 2500,
     })
 
-    return response.choices[0].message.content || ''
+    return response.content
   } catch (error) {
     console.error('Error generating release notes:', error)
     throw new Error('Failed to generate release notes')
