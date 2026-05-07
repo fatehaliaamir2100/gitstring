@@ -4,6 +4,12 @@
   "devCommand": "next dev",
   "installCommand": "npm install",
   "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/cron/sync-commits",
+      "schedule": "*/30 * * * *"
+    }
+  ],
   "env": {
     "NEXT_PUBLIC_SUPABASE_URL": {
       "description": "Supabase project URL",
@@ -31,6 +37,9 @@
     },
     "OPENAI_API_KEY": {
       "description": "OpenAI API Key for AI features (optional)"
+    },
+    "CRON_SECRET": {
+      "description": "Secret token for cron job authentication"
     },
     "NEXT_PUBLIC_APP_URL": {
       "description": "Your app URL (https://your-app.vercel.app)"
